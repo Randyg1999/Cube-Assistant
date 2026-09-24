@@ -1,0 +1,159 @@
+SECOND ATTEMPT (next session) — the wall moved a long way
+---------------------------------------------------------
+The diagnosis below about count-based progress was correct, and fixing it broke
+through the second-face wall entirely.
+
+What changed: track piece IDENTITY, not colour, and lock INDIVIDUAL SLOTS
+instead of whole faces. See js/cube/centres-identity-nxn.js (validated, 200
+random sequences, zero colour or orbit mismatches). It also models the three
+centre orbits explicitly, which the first model did not.
+
+Measured, 5x5, 60-move scrambles:
+
+  first attempt (face-locked, count-based)   stalled on the SECOND face, 6-8/9
+  slot-locked, fixed slot order, depth 5     44 of 54 (four faces), 85 s/try
+  slot-locked, order-free, lock-all-correct  33-40 of 54, depth 4
+  greedy net-gain + 1-move-setup commutators,
+    no locking, depth 3                      44-48 of 54, 3.7 s/try   <-- best
+
+What is left is the genuine endgame: the final 6-10 centre pieces need longer
+sequences than a depth-3/4 search reaches. This is the same place human methods
+get hard, and it is what a commutator catalogue exists to solve. It is NOT the
+same failure as the first attempt — that one could not finish the second face.
+
+Notes on what did and did not help:
+  * Locking every correct slot over-constrains: accidentally-correct pieces get
+    frozen and block every commutator. Reached only 33-40.
+  * Forcing a fixed slot order means always ending a face on its hardest case.
+    Letting the search take whichever slot is cheapest is better.
+  * Best combination so far: no locking at all, require a net gain in correct
+    slots across the whole cube, depth-3 IDDFS with a conjugated-commutator
+    fallback.
+
+NEXT: a canonical commutator catalogue for the endgame. Pick a buffer slot,
+find a short setup mapping the target onto a helper slot with a known 3-cycle,
+apply setup + commutator + inverse setup. Bounded and terminates by
+construction, unlike widening the search.
+
+CONTAINER WARNING: the Node sandbox is not reliable across turns. Files created
+in one turn can be missing in the next, and a stale process table can make a
+dead background job look alive. Do all work inside a single tool call, keep
+runs under the 300 s limit, and copy anything worth keeping into the project
+immediately.
+
+FIRST ATTEMPT — research + findings
+===================================
+
+STATUS: centres not solved. Edge pairing and the 3x3 finish not started.
+No 5x5 solver code is wired into the app. js/cube/centres-model-nxn.js is
+present but unused and unreferenced by Cube Assistant.html.
+
+THE METHOD (from Feliks Zemdegs' beginner 5x5 guide, cubeskills.com)
+--------------------------------------------------------------------
+This is the specification to implement. It is a teaching method with named
+stages, which is what this app needs — not an optimal solver.
+
+Centre piece types (CANNOT be interchanged with one another):
+  * middle centres — fixed, one per face, define that face's colour
+  * corner centres — 4 per face
+  * edge centres   — 4 per face
+The first model treated all centres as interchangeable by colour. They are
+three separate orbits.
+
+Centres are built as 1x3 BARS, not piece by piece:
+  1. Build the inner 1x3 bar: two edge centres plus the fixed middle.
+  2. Build the two outer 1x3 bars: two corner centres plus an edge centre.
+  3. Attach the outer bars to the inner bar.
+  4. Solve the opposite face the same way without breaking the first.
+  5. Hold the finished pair on L and R, then solve two ADJACENT centres.
+  6. Last two centres: same bar approach again.
+
+Edge pairing, first 8 edges — Freeslice:
+  Use one slice as a working zone; wide turns around that axis connect wings to
+  midges. Store finished edges in the top and bottom layers (4 each), then
+  slice to restore the centres.
+    R U' R'             insert top-front to front-right, preserving orientation
+    F R' F' R           insert, changing orientation
+    R U R' F R' F' R    flip the front-right edge in place
+
+Edge pairing, last 4 edges — slice-flip-slice (preserves centres):
+    Uw' (R U R' F R' F' R) Uw
+    Dw' y' (R U R' F R' F' R) Dw
+
+Edge parity (only on the 12th edge; 5x5 has NO PLL parity):
+    Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 3Rw' U2 Rw U2 Rw' U2 Rw'
+  NOTE: this contains an x whole-cube rotation, and the slice-flip-slice above
+  contains y'. The engine has no rotation moves. Either add x/y/z to the engine
+  or rewrite these in fixed notation. Decide this before implementing edges.
+
+3x3 stage: outer layers only. The existing 3x3 solvers apply unchanged.
+
+WHY NOT AN EXISTING SOLVER
+--------------------------
+  cs0x7f/cube555        51-52 moves for reduction, ~240 MB pruning tables
+  dwalton76/NxNxN       78.9 moves for 5x5 reduction, lookup tables + IDA*
+Neither fits a file:// browser app, and neither produces teachable named
+stages. Worth knowing they exist if the goal ever becomes "shortest solution".
+
+WHAT WAS BUILT AND VERIFIED
+---------------------------
+1. A Node test harness running the REAL engine. js/core/cube-math.js and
+   js/cube/nxn-kinematics.js are clean UMD with no DOM dependency, so they load
+   under Node directly. A solver can be developed against thousands of random
+   scrambles instead of hand-tested in a browser. Verified 98 pieces at N=5,
+   152 at N=6, correct move sets, every layer reachable by moveForLayer, and
+   200/200 scramble round-trips.
+
+   Rebuilding it is cheap: copy those two files into a folder keeping the
+   ../core/ relative path, then require('./cube/nxn-kinematics.js')(5).
+
+2. js/cube/centres-model-nxn.js — compact centre model: centres as a flat
+   colour vector with a precomputed permutation per move, so a search step is
+   one array gather instead of cloning 98 cubies. Validated at 0 divergences
+   over 300 random 25-move sequences. Correct and worth keeping.
+
+TWO STRUCTURAL FACTS (confirmed empirically)
+--------------------------------------------
+* An outer face turn NEVER moves a centre piece between faces — it only rotates
+  that face's own centre block. Outer turns are alignment only, and are free
+  once a face is complete.
+* Centres migrate between faces ONLY through inner slices. Every insertion is
+  therefore necessarily align / slice in / park / slice back — a commutator.
+* Solving L then R beats U then D: with L and R done, all three x-slices are
+  free and move pieces only among U, F, D, B.
+
+WHERE IT STALLS — the one number that matters
+----------------------------------------------
+The FIRST centre solves reliably with depth-3/4 IDDFS.
+The SECOND centre consistently stalls at 6-8 of 9 with the first locked.
+Same wall every attempt:
+
+  plain IDDFS depth 4                       first face ok, second stalls
+  commutator templates only                 stalls on the FIRST face
+  IDDFS depth 3 + templates + depth 4       first ok, second stalls 6-8/9
+  18,468 conjugated commutators, 1-move
+    setups, opposite-pair-first order       first ok, second stalls 6-8/9
+
+Verified a genuine limit, not a bug: at a stalled state, an exhaustive sweep of
+every [slice, face-turn, slice'] and every [s,b,s',b'] commutator finds nothing
+that gains a piece while keeping the first face complete.
+
+The common flaw in all four attempts: treating each step as "strictly increase
+the count on the target face". That works while a face is mostly empty and
+breaks for the last few pieces, where the correct sequence passes through a
+state no better by that measure. This is exactly why the real method builds
+BARS — the bar is the unit that makes the last pieces placeable.
+
+NEXT STEPS, in order
+--------------------
+1. Model the three centre orbits separately. A corner centre can only ever
+   occupy a corner-centre slot.
+2. Make the unit of work a 1x3 bar, not a single piece. Target "build this
+   specific bar in this specific slot", giving the search a reachable goal
+   rather than a count to maximise.
+3. If still short, widen setups to two moves (~330k shapes). A few seconds per
+   insertion is acceptable for a one-off solve.
+4. Only then start edge pairing. It assumes solved centres.
+
+Do not resume by trying another variation of count-maximising search. That road
+has been walked four times.

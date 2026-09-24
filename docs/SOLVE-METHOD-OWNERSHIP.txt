@@ -1,0 +1,70 @@
+Solve-method ownership
+======================
+
+The rule
+--------
+Every puzzle owns its own solve methods. Nothing outside a puzzle's folder
+declares what methods that puzzle has, and no method calls another method's
+solving code.
+
+Concretely:
+
+1. Each puzzle declares its methods in js/<puzzle>/methods-<puzzle>.js as
+   window.PuzzleMethods<Puzzle> = { list: [{value, label}, ...], default }.
+
+2. js/app/puzzle-switching.js only READS those declarations. It never contains
+   a method list of its own.
+
+3. "Cube Assistant.html" contains no method options at all. The <select> is
+   empty in the markup and populated at runtime.
+
+4. Each puzzle's dispatcher branches on its own method values and THROWS on an
+   unrecognized one. No silent fallback to a default method.
+
+Why it is written down
+----------------------
+The 3x3 shipped a dropdown listing Standard Beginner / CFOP / Kociemba while
+the registry still declared "Randy's Method" and Standard Beginner, with
+defaultMethod 'randy' — a value the dispatcher did not handle. The mismatch was
+covered by an inline MutationObserver in the HTML that rewrote the dropdown
+whenever the registry rebuilt it. Three places claimed authority over one list,
+so all three could disagree.
+
+Randy's Method itself has been removed. Its end-to-end solve is what Standard
+Beginner now runs (js/3x3/solver3x3-beginner.js).
+
+Adding a method
+---------------
+1. Write the solver in the puzzle's own folder.
+2. Add {value, label} to that puzzle's methods-<puzzle>.js.
+3. Add a branch in that puzzle's dispatcher.
+4. Add the two script tags to "Cube Assistant.html".
+
+Nothing else needs to change, and nothing outside js/<puzzle>/ should.
+
+Isolation status
+----------------
+Done:
+- The 2x2 Shortest Move solver was moved out of js/3x3/solve-3x3.js into
+  js/2x2/solver2x2-optimal.js. A 3x3 edit can no longer break 2x2 solving.
+- optimizeMoves and inverseMove moved to js/core/move-utils.js. The 2x2 no
+  longer reaches into a 3x3 file for them. These are notation algebra, not
+  solving logic — kept shared on purpose so two copies cannot drift apart.
+  Solving logic must never be added to that file.
+- 3x3 methods: standard / cfop / kociemba each use their own solver module.
+- 2x2 methods: Beginner and Shortest Move share nothing.
+- Pyraminx. Computer Solve and Beginner Human Solve are now separate files
+  (solver-pyraminx-computer.js, solver-pyraminx-human.js), each with its own
+  tip-alignment loop and its own staging. ui-pyraminx.js is UI only.
+  Both read the optimal database through policy-lookup-pyraminx.js. The Human
+  method's fourth stage still uses that database walk to finish the last three
+  edges, which is a table read, not a call into the Computer planner —
+  replacing it with a taught last-layer algorithm set would be a real method
+  change and belongs in solver-pyraminx-human.js if you ever want it.
+  Also removed: simplifyPyraminxMoveSequence, which was defined and never
+  called.
+
+Not done yet:
+- 4x4. Its guided solve runs from its own staged sidebar buttons rather than
+  the Method dropdown. Its single registered method is a placeholder so the
+  puzzle registers like the others.

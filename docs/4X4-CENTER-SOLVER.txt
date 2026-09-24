@@ -1,0 +1,53 @@
+4x4 Center Solver — Ordered Human-Style Bar Planner
+====================================================
+
+This build makes center solving deterministic in both method and presentation.
+
+Center order
+------------
+1. Yellow — top
+2. White — bottom
+3. Green — front
+4. Blue — back
+5. Orange — right
+6. Red — left
+
+Planner
+-------
+- Uses short wide-turn center-building triggers such as Rw U Rw', Rw U2 Rw',
+  and rotated/mirrored equivalents.
+- Builds and joins 1x2 bars while protecting previously solved center blocks.
+- Plans from the current state; it does not reverse scramble history.
+- The prior human-style global planner and deterministic U2 solver remain as
+  safety fallbacks if the ordered planner cannot find a route.
+
+Guided descriptions
+-------------------
+Each move is tagged with the planner's actual current intent. Examples include:
+- Building first Yellow bar
+- Building second Yellow bar
+- Matching both yellow bars to complete the yellow center
+- Moving the white work bar out of the way before restoring the yellow center
+- Positioning the second green bar for the front center
+- Matching both blue bars while preserving the solved centers
+
+Playback
+--------
+Compute Centers, Next Move, Back, Auto-Play/Pause, and speed control are all
+available in the 4x4 Guided Solve panel.
+
+Validation performed for this build
+-----------------------------------
+10 independent random 40-move 4x4 scrambles after the ordered/annotation change:
+- 10/10 center solves verified
+- 10/10 used the ordered human-style planner
+- 0 U2 fallbacks
+- average 39.1 displayed moves
+- shortest 34 moves
+- longest 44 moves
+
+Displayed move count uses the app's normal notation, where a wide move such as
+Rw is one move.
+
+The legacy U2 fallback strategy is adapted from Cameron LaBounty's MIT-licensed
+Rubiks-Cube-Solver; see THIRD-PARTY-NOTICES.txt.

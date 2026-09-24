@@ -1,0 +1,383 @@
+NxN roadmap — 2x2 through 6x6
+=============================
+
+Goal
+----
+One visual style and one UI for every NxN cube, with the 3x3 as the reference
+for both. Cube-specific code stays in the cube's own folder; anything shared
+reads puzzle data from the registry instead of testing puzzle names.
+
+Phase 1 — unify the look                                            [DONE]
+--------------------------------------------------------------------------
+The 2x2 had a bespoke renderer: an SDF body meshed with marching tetrahedra,
+rounded hidden-edge fillets, separate rounded sticker shapes and an invisible
+pick proxy. Removed. Every cube now uses js/cube/render-cubie.js:
+
+  - CUBIE_GEOMETRY, one RoundedBoxGeometry shared by every cubie of every cube,
+    built once and treated as persistent by clearPuzzleVisuals().
+  - materialsFor(), which used to live in js/3x3/render-3x3.js even though the
+    4x4 already depended on it.
+  - The mechanical core, now a unit sphere scaled per cube rather than a
+    hardcoded 1.25-radius sphere visible only on the 3x3. Radius rule is
+    outermost layer offset + 0.25, which reproduces the old 3x3 value exactly.
+
+buildCube() and refreshMaterials() lost their 2x2 branches. render-2x2.js and
+render-3x3.js are now 2D nets only.
+
+If the old 2x2 look is ever wanted back, it is in the backups outside this
+folder; it was removed rather than archived in-tree.
+
+Phase 2 — parameterize the shared layer                             [DONE]
+--------------------------------------------------------------------------
+Removed the hardcoded spots that blocked any new cube size:
+
+  - cubeEngineForType() was `type === '4x4' ? E4 : E`. Now reads the registry.
+  - parseCubeStateLine() hardcoded the 3x3 engine and "all 26 cubies". Now
+    takes a puzzle type and derives the count from that cube's solved state.
+  - Registry entries declare isNxN, size and coords.
+  - render-cubie.js reads isNxN and coords from the registry rather than a list
+    of puzzle names.
+
+Coordinate convention: odd cubes use consecutive integers centered on 0 at
+positionScale 1.0 (3x3 = [-1,0,1], 5x5 = [-2,-1,0,1,2]); even cubes use odd
+integers at positionScale 0.5 (2x2 = [-1,1], 4x4 = [-3,-1,1,3], 6x6 =
+[-5,-3,-1,1,3,5]). Both give world spacing of 1.0 per layer. The 3x3's existing
+coordinates were deliberately left untouched — changing them would break every
+3x3 solver and every saved RCS1 state line.
+
+Phase 4 — dropdown order                                            [DONE]
+--------------------------------------------------------------------------
+Puzzle dropdown is now numeric: 2x2, 3x3, 4x4, then Pyraminx and Megaminx.
+Because puzzleType initializes to '3x3' while a <select> shows its first option
+by default, puzzle-switching.js now sets cubeTypeSelect.value explicitly at
+boot. Without that the app would render a 3x3 while displaying "2x2".
+
+Phase 3 — generalize net, sidebar, playback                    [3a DONE]
+--------------------------------------------------------------------------
+This is the phase that actually makes 5x5 and 6x6 cheap. Three duplications:
+
+  1. Nets.                                                        [DONE]
+     js/cube/net-nxn.js now owns one net for every cube size. Cells derive
+     from the puzzle's declared coords, the DOM is generated, and the CSS is
+     a single block driven by --net-n / --net-face-size. The three markup
+     blocks in the HTML collapsed to one empty <div id="cubeNet">, and
+     render-2x2.js, render-3x3.js and render-4x4.js were net-only files, so
+     all three are gone.
+
+     The 2D view control moved out of the sidebars and into the top-right of
+     the 3D viewport: a "2D View" pill that expands into the net, with an x to
+     collapse it back. The three per-sidebar "Show live 2D net" checkboxes are
+     gone, which frees that space in every cube sidebar. Expanded state is
+     remembered across puzzle switches. The net panel keeps pointer-events
+     off so drags still reach the canvas behind it; only the close button
+     takes clicks.
+
+     BUG FIXED IN PASSING: the 4x4 net displayed its U and D faces rotated
+     180 degrees. Its cell table used descending z for U and ascending z for
+     D, the opposite of the 2x2 and 3x3. The net's correctness rule is that
+     touching edges in the unfolded cross must be touching stickers on the
+     cube — U's bottom row is the row adjacent to F, and D's top row is the
+     row adjacent to F. The 2x2 and 3x3 satisfied that; the 4x4 did not.
+     Invisible on a solved cube, which is likely why it went unnoticed.
+
+     STILL OPEN: none. The update2x2Net / update3x3Net / update4x4Net shims
+     were deleted once the 4x4 solve files were confirmed to be pure modules
+     with no DOM access. render-loop.js called two of them every frame and was
+     missed in the first sweep — check small files too.
+
+  3. Playback.                                                    [DONE]
+     js/cube/solve-playback.js now owns the state machine, HUD, Next /
+     Auto-Play / Back, speed slider, error box and stale handling for all three
+     cubes. createSolvePlayback(config) takes a per-puzzle plan() function and
+     nothing else puzzle-specific. Roughly 400 lines came out of the three
+     solve-*.js files, all of it playback — every method dispatch is verbatim,
+     including the per-stage optimizeMoves and the reason it is per-stage.
+
+     The compute control is either a dedicated button (4x4) or the Next button
+     doing double duty (3x3, 2x2), which is how those two always worked.
+
+     Behavior the 3x3 had and the others gained: a stale state when the puzzle
+     is turned manually or the method changes, manual moves advancing the guide
+     when they match the displayed step, and an error box on failure.
+
+     Fixed in passing: stopSharedPuzzleActivity() in puzzle-switching.js reached
+     directly into autoPlaying / autoTimer / autoPlaying2x2 / autoTimer2x2,
+     which now live inside the controller's closure. It would have thrown on
+     every puzzle switch.
+
+  2. Sidebars.                                              [STEP 1 DONE]
+     js/app/sidebar-template.js generates the 2x2, 3x3 and 4x4 sidebars from
+     one descriptor each. It must load BEFORE js/core/bootstrap.js, since every
+     consumer looks these elements up at load.
+
+     Roughly 200 lines came out of the HTML. A new cube size is now a
+     descriptor: suffix, palette note, orientation flag, learn text (or null),
+     solve title, computeButton, speedMax, stateLine, scan, idleDesc, roadmap.
+
+     STEP 1 emits ids byte-identical to the old markup, so no consumer changed.
+     Do not rename anything in the template until step 2.
+
+     STEP 2 DONE: the template collects the elements it emitted into a frozen
+     per-puzzle map, exposed as window.SidebarElements['3x3'|'2x2'|'4x4'] and
+     fetched via sidebarElements(puzzleId, requiredNames). Asking for a name
+     the template did not emit throws at load, naming the element.
+
+     That is the actual value of step 2. The ids themselves were never the
+     problem — solve-3x3.js is 3x3-specific by definition. The problem was that
+     the template and every consumer independently agreed on base+suffix with
+     nothing enforcing it, so a mismatch produced a null and a silently
+     no-opping control. That is exactly how the 4x4 diagnostics panel came to
+     be written to an element that did not exist.
+
+     The three solve files declare their element needs up front and use the
+     map. controls-orientation.js and controls-shared.js deliberately still use
+     direct lookups: they span all three sidebars (one shared HEX table, one
+     set of presets), so scoping them per-cube would be wrong, not cleaner.
+
+     The Pyraminx and Megaminx sidebars stay hand-written. They share almost
+     nothing with the cubes and forcing them through the template would make it
+     more complicated than what it replaces.
+
+     Done in passing:
+       - Holding Orientation is now its own collapsible section instead of
+         being nested inside Color Palette, where collapsing the palette hid
+         it. Driven by the descriptor's orientation flag, which is the
+         odd-cube property: 3x3 and 5x5 yes, 2x2/4x4/6x6 no.
+       - The 4x4's stale HUD text ("4x4 Foundation Ready", "the arbitrary-state
+         reduction solver is the next implementation phase") is finally gone.
+         An earlier fix for it was in an edit batch that got rejected
+         atomically, so only part of that correction had landed.
+       - The 4x4's speed control uses the standard .speed-control block like
+         the other cubes, keeping its higher speedMax of 3.
+       - switchPuzzle() still called update2x2Net / update3x3Net / update4x4Net
+         at its end. Fixed.
+
+UI note worth acting on eventually
+----------------------------------
+Set Front / Set Top arm a mode, and the face is then chosen by clicking a
+PALETTE SWATCH, not by clicking the cube. Clicking the cube is the natural
+gesture and does nothing. The status line says "click a palette color", which
+only reads clearly if you already know. Either make cube clicks work for
+arming, or reword to "click a color swatch above".
+
+Also note both buttons ship with class="active" and the status line already
+shows the armed text, so clicking Set Front produces NO visible change even
+when it works. That looks like a bug and is not one.
+
+Move optimization                                                   [DONE]
+--------------------------------------------------------------------------
+js/cube/optimize-nxn.js. js/core/move-utils.js only parses single-letter face
+notation, so it cannot be used above 3x3 — it has no idea what Rw or 2R mean
+and would cancel moves acting on different layers.
+
+Two exact reductions: same layer sums mod 4; same axis regroups by layer,
+because every turn about one axis commutes with every other turn about that
+axis whatever layers it takes. Never reorders across a change of axis. The
+depth prefix is parsed as a number, so 3U and 3Rw work — 5x5 and 6x6 inherit it.
+
+Wired into the 4x4 plan, with the optimized list replayed and checked for a
+solved state before use; it falls back to the unoptimized plan otherwise.
+
+Measured saving: 3-4%, not the 10-25% guessed beforehand. The three stage
+solvers were already producing tight sequences and the seams held little waste.
+Keep it (exact, free, inherited by 6x6) but do not expect length to come from
+here. Typical 4x4 solve is 250-285 moves.
+
+The 4x4 Guided Solve section now has a diagnostics panel showing the per-stage
+breakdown (centers / wing pairing / 3x3 finish) plus raw vs optimized totals.
+That breakdown is the number to look at before trying to shorten anything: only
+the dominant stage is worth touching. A greedy wing-pairing variant — pair
+whichever wing is cheapest rather than a fixed teaching order — is the obvious
+candidate, but it trades away the teaching property, so it belongs as a SECOND
+4x4 method rather than a replacement.
+
+Consolidating playback is NOT a violation of the solve-method ownership rule in
+docs/SOLVE-METHOD-OWNERSHIP.txt. That rule governs solvers; each cube keeps its
+own solver files and its own method list. The HUD is UI.
+
+Per-cube UI differences that must survive the generalization:
+  - Set Front / Set Top reads fixed center colors via E.centerColor(). Odd
+    cubes only: 3x3 and 5x5 have it, 2x2/4x4/6x6 do not.
+  - Even cubes need parity controls the odd cubes do not.
+  - The sticker-edit guard `cubie.pos.filter(v => v !== 0).length === 1`
+    already generalizes correctly: it protects fixed centers on odd cubes and
+    correctly leaves movable centers editable on even cubes.
+
+Phase 5 — add the cubes                                          [NOT DONE]
+--------------------------------------------------------------------------
+Per cube: engine, verifier, renderer registration, methods file, solver.
+js/4x4/engine-4x4.js is the template for an even cube.
+
+Order and difficulty:
+  5x5 is the cheap one. Odd cube, fixed centers to build against, no parity.
+  6x6 is the expensive one. Oblique centers (mirror-image pairs that cannot be
+  handled with x-center techniques) plus both parities.
+
+Phase 5 — add the cubes                                       [5x5 PARTIAL]
+--------------------------------------------------------------------------
+js/cube/nxn-kinematics.js is the shared core: createNxNEngine(N) returns a
+full engine. State, move application, sticker assignment, solved check, colour
+queries, drag-layer lookup and scramble are all written once and generalized
+over N. Move tables generate from N, with the odd/even branch deciding whether
+middle slices and fixed centres exist.
+
+js/5x5/engine-5x5.js is literally createNxNEngine(5). A 6x6 is the same with a
+6.
+
+5x5 DONE: geometry, all turns (outer / wide / 2R-style slices / M-E-S), drag
+to turn, sticker entry, scramble, reset, shared cubie look, 2D net, count
+badges reading 25.
+
+5x5 NOT DONE: no solver, no verifier. Verify says so rather than doing
+nothing; the Guided Solve section shows Scramble and Reset with a note instead
+of a HUD that cannot work (sidebar descriptor flag solver:false). Method
+dropdown hides itself, as the Megaminx does.
+
+The existing 2x2/3x3 and 4x4 engines were NOT migrated onto the core. They
+carry every working solver and there is no test harness to prove an extraction
+preserved behavior. Two engine styles coexisting costs nothing structurally —
+the registry abstracts engine lookup.
+
+Three things the 5x5 exposed, all the same shape: code that named a puzzle
+explicitly instead of asking the registry.
+  - Holding Orientation ids were unsuffixed, so a second odd cube collided with
+    the 3x3. Now suffixed.
+  - The sticker-click handler rebuilt cubie.id from colours for anything that
+    was not a 4x4. Above 3x3 many pieces share a colour set, so ids carry a
+    position tag and must not be rebuilt. Now checks size <= 3.
+  - moveFromLayerDrag routed to the geometric handler only for '4x4'. The 5x5
+    fell into the 2x2/3x3 path, which matches candidate faces against the 3x3
+    engine's move table: coordinate +/-1 matched the 3x3's R/L so inner-slice
+    drags queued outer turns, and +/-2 matched nothing. The geometric handler
+    was already general and just had E4 hardcoded; it now uses
+    cubeEngineForType() and any cube of size >= 4 routes to it.
+  - Scramble/Reset were wired by button name for three cubes. Now wired
+    generically from the template's element maps, so a new cube inherits both.
+
+Sidebar consistency across NxN                                      [DONE]
+--------------------------------------------------------------------------
+Every NxN cube now has the same Color Palette (swatches with count badges,
+preset dropdown full-width beneath them, note, Verify Cube) and its own
+Holding Orientation section.
+
+Holding Orientation used to be 3x3-only because it located a colour with
+E.centerColor(), which needs a fixed centre. Now faceReferenceColor() reads the
+live centre on ODD cubes and falls back to FACE_DEFAULT_COLOR on even ones,
+where the face-to-colour mapping is fixed and cannot drift. Oddness comes from
+the registry's size, NOT from an engine flag: the hand-written 2x2/3x3 and 4x4
+engines predate the NxN core and have no ODD property, so testing one sent even
+cubes into centerColor looking for a cubie at [1,0,0] that a 2x2 does not have.
+
+All five sidebars' Set Front / Set Top buttons wire to shared handlers acting
+on whichever cube is showing. Every palette is built by buildPaletteSwatch(),
+which attaches the count badge, the colour input and the click interception
+that makes a swatch mean "this colour faces me" while a target is armed. Role
+labels are stored per puzzle so they update on the active cube.
+
+The 2D net now draws in the held frame. It always used fixed world axes, so it
+never followed the 3D view on ANY cube, including the 3x3 — only visible once
+the 2x2 gained orientation controls. Each face gets an outward normal plus
+across and down axes derived from Front and Top, chosen so touching edges in
+the net are touching stickers on the cube. Verified to reproduce the old tables
+exactly at the default Green-front / Yellow-up orientation.
+
+Changing orientation no longer resets the camera. updateCubeViewOrientation()
+used to reassign camera.position, camera.up and controls.target every time,
+throwing away zoom and viewing angle. The cube group carries the orientation,
+so the camera never needed to move.
+
+NEXT: the 5x5 reduction solver — ATTEMPTED, NOT DONE. See
+docs/5X5-SOLVER-NOTES.txt for the method specification, what was verified, the
+exact point where it stalls, and the four approaches that failed. Do not
+resume without reading it: the obvious approach has been tried four times.
+
+6x6 DONE (geometry): engine is createNxNEngine(6). Even family, so no fixed
+centres and no M/E/S. Its move set is the most complex in the project — wide
+turns at two widths (Rw, 3Rw) and two inner slices (2R, 3R) — and all of it is
+generated. This is what proved the even path of the shared core. With both
+families proven, a 7x7 or 9x9 would be four lines each.
+
+Verifiers                                                  [5x5 + 6x6 DONE]
+--------------------------------------------------------------------------
+js/cube/verify-nxn.js — createNxNVerifier(engine), generic over N.
+
+Checks: sticker counts (N*N per colour), piece census (8 corners,
+12*(N-2) edge pieces, 6*(N-2)^2 centres), the 8 valid corner triples once
+each, each of the 12 adjacent colour pairs on exactly N-2 edge pieces, centre
+distribution, and total corner twist being a multiple of 3.
+
+Corner PERMUTATION is deliberately not checked. Above 3x3 pieces sharing a
+colour set are visually interchangeable, so an odd permutation of them absorbs
+any corner parity. Same reasoning as the 4x4 verifier, and it is why OLL/PLL
+parity are states to solve rather than input to reject.
+
+KNOWN INCOMPLETE ON ODD CUBES: a 5x5 also has middle edges behaving like 3x3
+edges, carrying a flip-parity invariant and a permutation-parity tie to the
+corners. Neither is checked. It never rejects a legal state, but it can accept
+an unreachable one. Add those two when the 5x5 solver lands.
+
+Repair messages: instead of reporting one wrong piece as four separate facts
+(count high, count low, impossible piece, missing piece), the verifier builds a
+surplus list and a deficit list and pairs them, minimising total sticker
+changes, producing "Change the GGY corner at Up-Front-Right to GOY." Pairing is
+within a piece kind. It falls back to the raw error list when surplus and
+deficit counts do not match per kind, or above 6 wrong pieces. With more than
+one repair it adds a note that the pairing is one way to fix it, not the only
+way — the minimal matching is genuinely not unique.
+
+Then 6x6's solver, which is the expensive one: oblique centres and both
+parities.
+
+Two things to settle before Phase 5
+-----------------------------------
+1. The 4x4 is unfinished. Centers and wing pairing work and solve-reduced-4x4
+   is wired to a button, but OLL/PLL parity is still listed as a remaining
+   stage. 6x6 inherits the same parity problem at larger scale. Solving it
+   once properly at 4x4 makes 6x6 mostly bookkeeping.
+
+Engine strategy — DECIDED
+-------------------------
+The useful parameterization axis is odd vs even N, not N itself. Three layers:
+
+  Kinematics (size-agnostic, write once): state representation, applyMove,
+    rotation math, sticker assignment, cloneState, worldDirOfLocal,
+    currentColorAt, cubieColorSet, colorCounts, the 24-orientation generator,
+    the corner-reachability loop, and the no-fixed-centers isSolved check.
+    All of this is ALREADY duplicated between cube-engine.js and
+    engine-4x4.js — the orientation generator, isSolved2x2 vs the 4x4's
+    isSolved, and verifyReachability2x2 vs cornerOrientationReachable are the
+    same code twice, differing only in slot coordinates.
+
+  Move tables and geometry (derive from N): COORDS, outer/inner/wide/slice
+    definitions, piece multiplicities, moveForLayer. The odd/even branch
+    decides whether middle slices and fixed centers exist at all.
+
+  Verification (per cube, irreducible): lives in js/<puzzle>/verify-*.js as it
+    already does. Odd and even cubes check genuinely different invariants.
+
+Why verification cannot be shared:
+  The 3x3 checks corner twist mod 3, edge flip mod 2, and corner permutation
+  parity matching edge permutation parity. The 4x4 checks ONLY corner twist,
+  and that is correct rather than incomplete: wings and centers are
+  individually indistinguishable on an even cube, so composition plus corner
+  orientation is the whole reachability condition. That is exactly why OLL and
+  PLL parity are legal states on a 4x4 and therefore a solving problem, not a
+  validation error.
+
+  5x5 does NOT inherit from the 4x4. Being odd, it gets fixed centers back,
+  middle edges that behave like 3x3 edges, middle slices, and the 3x3
+  permutation-parity invariant on its fixed-center-and-middle-edge subset.
+  6x6 behaves like the 4x4.
+
+Migration policy:
+  Build the shared core and use it for 5x5 and 6x6 ONLY. Do NOT migrate 3x3,
+  2x2 or 4x4 onto it. cube-engine.js carries three 3x3 solvers, both 2x2
+  methods and the scanner; the 4x4 is mid-development with parity outstanding;
+  and there is no test harness in this project to prove an extraction
+  preserved behavior. The registry abstracts engine lookup, so two engine
+  styles coexisting costs nothing structurally.
+
+  Build 5x5 first. It exercises the odd-family path. If the core handles a
+  3x3-shaped odd cube and the existing 4x4's even shape without contortion,
+  that is the evidence for whether migrating the older engines is ever worth
+  doing. Decide then, with data, not now.

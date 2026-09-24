@@ -1,0 +1,38 @@
+Cube Assistant — offline library notes
+======================================
+
+Everything in lib/ is vendored so the app runs from file:// with no web
+server, no CDN, and no network access at runtime.
+
+Current contents
+----------------
+  lib/three.bundle.js   three.js core + OrbitControls + RoundedBoxGeometry,
+                        bundled to a single classic script that assigns
+                        window.THREE, window.OrbitControls and
+                        window.RoundedBoxGeometry.
+  lib/fonts.css         @font-face rules pointing at lib/fonts/.
+  lib/fonts/            IBM Plex Sans and IBM Plex Mono woff2 subsets.
+  lib/THIRD_PARTY_NOTICES.txt
+
+Nothing else in the project reads lib/ at runtime.
+
+Rebuilding (only needed if a vendored file is lost)
+---------------------------------------------------
+The npm build dependencies were removed from the project on 2026-09-14 —
+they were roughly 1,700 files that served no runtime purpose. The exact
+pinned versions were:
+
+  three                       0.185.1
+  esbuild                     0.28.2
+  @fontsource/ibm-plex-mono   5.3.0
+  @fontsource/ibm-plex-sans   5.3.0
+
+To rebuild, install those four in a scratch folder OUTSIDE this project,
+bundle the three entry points into one classic script that assigns the
+three globals listed above, and copy the needed woff2 subsets into
+lib/fonts/. Do the work outside the project folder and copy only the
+finished artifacts back in.
+
+Keeping the build toolchain out of the project is deliberate: the app is
+plain classic scripts opened directly from disk, and it should stay
+inspectable without a node_modules tree sitting next to it.

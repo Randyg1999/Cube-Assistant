@@ -1,0 +1,42 @@
+Cube Assistant — 4x4 Reduced 3x3 Finish
+========================================
+
+Prerequisites
+-------------
+All six 2x2 center blocks must be solved and all twelve wing pairs must be paired.
+
+Solve flow
+----------
+1. Build a virtual 3x3 state from the physical 4x4 corners, paired wings, and solved centers.
+2. Detect reduced-state parity.
+   - OLL parity: correct the single impossible flipped reduced edge.
+   - PLL parity: correct the impossible reduced permutation.
+3. Reuse Cube Assistant's existing beginner 3x3 solver:
+   - Yellow Daisy
+   - White Cross
+   - White first-layer corners
+   - Middle-layer edges
+   - Yellow Cross
+   - Position yellow corners
+   - Orient yellow corners / complete yellow face
+   - Position final edges
+4. Apply those ordinary outer-layer moves directly to the physical 4x4.
+
+Guided playback
+---------------
+The existing 4x4 Back / Next / Auto-Play / speed controls are used. Per-move
+HUD text is derived from the actual beginner-solve milestone currently being
+worked on, rather than from a generic move counter.
+
+Parity algorithms
+-----------------
+The parity move sequences use standard 4x4 reduction algorithms documented by
+widely used cubing references such as J Perm and Ruwix. The OLL sequence uses
+Cube Assistant's inner-slice notation (2R / 2L); the PLL sequence uses 2R and Uw.
+
+Validation performed for this build
+-----------------------------------
+10 fresh random 40-move 4x4 scrambles were run through:
+  scramble -> ordered centers -> fixed-order wing pairing -> reduced 3x3 finish
+All 10 replayed to a fully solved physical 4x4.
+The sample included OLL parity, PLL parity, both together, and no-parity cases.

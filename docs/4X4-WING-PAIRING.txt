@@ -1,0 +1,35 @@
+4x4 Wing Pairing — Phase B
+===========================
+
+Active reduction stages in this build:
+  1. Ordered human-style center construction
+  2. Fixed-order beginner wing pairing
+
+Wing teaching order:
+  UF -> UR -> UB -> UL -> FR -> FL -> BR -> BL -> DF -> DR -> DB -> DL
+
+Pairing strategy:
+  * Centers must already be solved.
+  * Outer-turn setup moves reposition the target wings without splitting solved pairs.
+  * Standard beginner slice/pair/restore triggers join the wings.
+  * Every earlier pair is protected before the next target is accepted.
+  * Later pairs can use a dedicated last-edges slice/restore case when needed.
+
+Guided Solve playback uses the existing Back / Next / Auto-Play / speed controls.
+HUD annotations identify the color pair being positioned, joined, and restored.
+
+Current scope:
+  * Pair all 12 reduced edges while keeping all six centers solved.
+  * Reduced-3x3 solving and parity handling are intentionally not active yet.
+
+Validation for this build:
+  * 12 fresh random 40-move scrambles
+  * centers solved first from each scramble
+  * 12/12 wing plans completed
+  * all 12 pairs complete after replay
+  * all six centers remained solved
+  * wing pairing range in that run: 66-105 moves, average 87.4
+
+The current method favors repeatability and teaching order over move optimality.
+A future 3-2-3/advanced pairing method could reduce move count further without
+changing the physical engine or reduction bridge.

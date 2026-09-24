@@ -1,0 +1,51 @@
+Cube Assistant — pre-4x4 architecture refactor
+
+Purpose
+-------
+This pass changes file boundaries, not puzzle behavior. It prepares the app for
+additional puzzles without turning shared files into puzzle-specific junk drawers.
+
+New structure
+-------------
+js/core/cube-math.js       Pure matrix/rotation helpers shared by cube engines.
+js/core/bootstrap.js       Three.js + engine globals and shared DOM references.
+js/core/colors.js          Shared palette constants and cube material factory.
+js/core/scene.js           Three.js scene/camera/renderer setup.
+js/core/render-loop.js     Render loop only.
+
+js/cube/cube-state.js      Shared cube state serialization + render-scale state.
+js/cube/render-cube-common.js Shared 2x2/3x3 lifecycle, cleanup, sync, animation.
+js/cube/controls-orientation.js Color presets, held orientation, notation mapping.
+js/cube/verify-ui.js       Shared verification result UI.
+
+js/2x2/render-2x2.js       2x2 net + custom SDF cubie mesh + inlay/core.
+js/2x2/verify-2x2.js       2x2 verifier adapter.
+js/3x3/render-3x3.js       3x3 net + cubie materials.
+js/3x3/verify-3x3.js       3x3 verifier adapter.
+js/pyraminx/render-pyraminx.js Pyraminx geometry and animation.
+
+Still deliberately unchanged
+-----------------------------
+- solve-3x3.js and solve-2x2.js stay separate and algorithmically unchanged.
+- Proven 2x2/3x3 reachability checks remain inside cube-engine.js for now;
+  puzzle-specific verifier adapters give the registry a clean interface without
+  risking a solver/engine regression immediately before 4x4 work.
+- No universal twisty-puzzle abstraction was introduced.
+
+Puzzle registry
+---------------
+PUZZLES now owns each puzzle's name, state factory, renderer, animator, verifier,
+method menu, default method, viewport hint, stop hook, and reset UI hook.
+Adding a puzzle should increasingly mean adding files plus one registry entry.
+
+Recommended smoke test
+----------------------
+1. Open Cube Assistant.html via file:// as usual.
+2. 3x3: scramble, manual face drag from angled view, verify, solve, reset.
+3. 2x2: inspect custom mesh, all four color presets including Mirror, scramble,
+   angled face drag, verify, beginner solve and shortest-move solve.
+4. Switch 3x3 <-> 2x2 repeatedly; confirm no stale verify/solve UI remains.
+5. Pyraminx: scramble/turn, both solve methods, reset, switch away/back.
+6. Camera/scanner handoff if available on the test machine.
+
+If those pass, this is the baseline to branch the 4x4 implementation from.

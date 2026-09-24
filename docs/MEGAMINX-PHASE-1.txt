@@ -1,0 +1,20 @@
+Megaminx Phase 1
+================
+
+Implemented:
+- Regular dodecahedral geometry derived from the dual icosahedron.
+- 12 centers, 30 physical edge pieces, 20 physical corner pieces.
+- 12 independently turnable faces at 72 degrees.
+- Prime and double turns for every face.
+- Sticker-drag face turning using screen-space tangent direction.
+- Orbit camera remains available when dragging the background.
+- 40-move scramble and reset.
+- Entirely local/offline; no new dependency.
+
+Architecture:
+- js/megaminx-engine.js              logical geometry and move engine
+- js/megaminx/render-megaminx.js     dodecahedron/sticker renderer and animation
+- js/megaminx/controls-megaminx.js   manual buttons, drag controls, scramble/reset
+
+Phase 1 deliberately does NOT include manual sticker entry, reachability verification,
+solver logic, or camera scanning. Those belong to later phases.

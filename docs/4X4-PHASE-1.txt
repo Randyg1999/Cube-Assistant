@@ -1,0 +1,54 @@
+Cube Assistant — 4x4 Phase 1 (physical model + interaction foundation)
+
+Implemented
+-----------
+- New 4x4 puzzle option in the main selector.
+- True visible-piece model: 56 physical pieces = 8 corners + 24 wings + 24 centers.
+- Integer logical coordinates {-3,-1,1,3}; no fake fixed centers.
+- 3x3-style rounded black cubies / full-face sticker color treatment.
+- Outer moves: U D R L F B (+ prime / 2).
+- Wide moves: Uw Dw Rw Lw Fw Bw (+ prime / 2).
+- Inner slices: 2U 2D 2R 2L 2F 2B (+ prime / 2).
+- Lowercase r/l/u/d/f/b accepted internally as aliases for wide turns.
+- Camera-aware sticker drag turns the exact physical layer under the drag.
+  Wide turns are intentionally exposed through the move buttons for now.
+- 40-move 4x4 scramble and solved reset.
+- Click-to-edit every sticker (including movable centers).
+- Shared Classic / High Contrast / True Pastel / Mirror appearance presets.
+- Optional live 4x4 2D net.
+- 4x4 verifier checks:
+    * 16 stickers of each color
+    * exactly 24 centers / 24 wings / 8 corners
+    * four center pieces of every color
+    * every legal corner color triple exactly once
+    * every legal wing color pair exactly twice
+    * impossible opposite-color wing/corner combinations
+    * 4x4 corner-twist reachability invariant
+
+Testing performed
+-----------------
+- node --check on every JavaScript file.
+- 10,000 random legal 40-move 4x4 scrambles: zero verifier false rejects.
+- Every generated scramble inverted back to solved successfully.
+- Move/inverse checks across the 4x4 move table.
+- 2,000 random legal 3x3 and 2x2 verification regression checks: zero failures.
+- HTML application script references checked; no duplicate DOM ids.
+
+Not implemented yet
+-------------------
+The arbitrary-state 4x4 reduction solver is intentionally NOT faked by reversing
+scramble history. The next phase is the real solver pipeline we agreed on:
+
+  centers -> pair wings -> reduced 3x3 -> parity handling
+
+The UI already identifies Beginner Reduction as the intended method and leaves a
+clear solver-stage placeholder rather than pretending the foundation is a solver.
+Camera scanning remains deferred until the 4x4 solver/state-entry path is stable.
+
+Runtime files not included
+--------------------------
+As with the pre-4x4 refactor package, keep your existing files beside the app:
+  policy-2x2.js
+  policy-pyraminx.js
+  cube_scanner_prototype.html
+and keep your existing lib/ folder.
